@@ -1,7 +1,11 @@
-﻿using ChatApp.Core.Models;
+﻿using ChatApp.Core.EventHandlers;
+using ChatApp.Core.Models;
+using ChatApp.Messages;
 using Microsoft.AspNetCore.SignalR.Client;
+using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Net.Http.Json;
+using System.Text;
 
 namespace ChatApp.Core.Services
 {
@@ -15,6 +19,8 @@ namespace ChatApp.Core.Services
         private HttpClient httpClient;
 
         HubConnection hub;
+
+        public event EventHandler<MessageEventArgs> OnMessageReceived;
 
         public async Task ConnectAsync(string userId)
         {
@@ -41,6 +47,14 @@ namespace ChatApp.Core.Services
 
             IsConnected = true;
 
+            hub.On<object>("ReceivedMessage", (message) =>
+            {
+                var json = message.ToString();
+                var obj = JsonConvert.DeserializeObject<ChatMessage>(json);
+                var msg = (ChatMessage)JsonConvert.DeserializeObject(json, obj.TypeInfo);
+                OnMessageReceived?.Invoke(this, new MessageEventArgs(msg));
+            });
+
             semaphoreSlim.Release();
         }
 
@@ -61,6 +75,19 @@ namespace ChatApp.Core.Services
             }
 
             IsConnected = false;
+        }
+
+        public async Task SendMessageAsync(ChatMessage message)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Not connected");
+            }
+
+            var json = JsonConvert.SerializeObject(message);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            await httpClient.PostAsync(Config.MessagesEndpoint, content);
         }
     }
 }

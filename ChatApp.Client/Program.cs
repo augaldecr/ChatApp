@@ -1,4 +1,5 @@
 ﻿using ChatApp.Core.Services;
+using ChatApp.Messages;
 
 public class Program
 {
@@ -11,6 +12,7 @@ public class Program
         userName = Console.ReadLine();
 
         service = new ChatService();
+        service.OnMessageReceived += Service_OnMessageReceived; 
         
         await service.ConnectAsync(userName);
 
@@ -27,6 +29,30 @@ public class Program
                 await service.DisconnectAsync();
                 keepGoing = false;
             }
+            else
+            {
+                var simpleTextMessage = new SimpleTextMessage(userName)
+                {
+                    Text = message,
+                };
+
+                await service.SendMessageAsync(simpleTextMessage);
+            }
         } while (keepGoing);
+    }
+
+    private static void Service_OnMessageReceived(object? sender, ChatApp.Core.EventHandlers.MessageEventArgs e)
+    {
+        if (e.Message.Sender == userName)
+        {
+            return;
+        }
+
+        if (e.Message.TypeInfo.Name == nameof(SimpleTextMessage))
+        {
+            var simpleText = e.Message as SimpleTextMessage;
+            var message = $"{simpleText.Sender}: {simpleText.Text}";
+            Console.WriteLine(message);
+        }
     }
 }
